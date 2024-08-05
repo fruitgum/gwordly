@@ -32,7 +32,8 @@ func main() {
 	fmt.Println("https://github.com/fruitgum/GWordly")
 	fmt.Println("Version: " + appVersion)
 	fmt.Println("2024")
-	game.Gwordly(game.GetWords())
+	word := game.GetWords()
+	game.Gwordly(word)
 }
 
 func handleTermination() {

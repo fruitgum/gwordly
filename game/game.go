@@ -17,20 +17,21 @@ import (
 )
 
 type Word struct {
-	Word  string   `json:"word,omitempty"`
+	Item  string   `json:"word,omitempty"`
 	Score int      `json:"score,omitempty"`
 	Tags  []string `json:"tags,omitempty"`
 }
 
 func GetWords() string {
 	logger := config.BotLogger
+	logger.Debug("Getting words")
 	var words []Word
 
 	apiURL := BuildAPIQuery()
 
 	r, err := http.Get(apiURL)
 	if err != nil {
-		logger.Error("Error getting words: ", err)
+		logger.Fatal("Error getting words: ", err)
 	}
 
 	defer r.Body.Close()
@@ -38,13 +39,14 @@ func GetWords() string {
 	jsonData, _ := io.ReadAll(r.Body)
 	err = json.Unmarshal(jsonData, &words)
 	if err != nil {
-		logger.Error("Can't unmarshal JSON: ", err)
+		logger.Fatal("Can't unmarshal JSON: ", err)
 	}
 	word := GetWord(words)
 
 	if word == "" {
-		logger.Debug("No word found")
+		logger.Debug("Can't find word")
 		time.Sleep(1 * time.Second)
+		words = []Word{}
 		GetWords()
 	}
 
@@ -53,36 +55,38 @@ func GetWords() string {
 
 func GetWord(words []Word) string {
 	logger := config.BotLogger
-	logger.Info("Getting word")
+	logger.Debug("Selecting word")
 	var word string
 
 	for _, w := range words {
 
 		var freqFloat float64
-		var partOfSpeech string
 
 		for _, tag := range w.Tags {
 
 			if len(tag) == 1 {
 				if tag != "n" {
 					continue
-				} else {
-					partOfSpeech = tag
 				}
 			}
 
 			if len(tag) == 10 {
 				freqSplit := strings.Split(tag, ":")
-				freqFloat, _ = strconv.ParseFloat(freqSplit[1], 64)
+				freqFloat, _ = strconv.ParseFloat(freqSplit[1], 8)
 			}
-			logger.Debug("Word: %v, freq: %v, part of speech: %v", w.Word, freqFloat, partOfSpeech)
+
 			if freqFloat > 0.5 {
-				word = w.Word
+				word = w.Item
 			}
+
+			logger.Debug("Word %v, freq: %v", w.Item, freqFloat)
+
+		}
+		if wordSplit := strings.Split(w.Item, " "); len(wordSplit) > 1 {
+			word = ""
 		}
 	}
 
-	logger.Debug("Word: %v", word)
 	return word
 }
 
@@ -100,8 +104,6 @@ func BuildAPIQuery() string {
 
 	endWith := alphabet[rand.Intn(len(alphabet))]
 
-	logger.Debug("Word starts with %v, ends with %v", startsFrom, endWith)
-
 	apiURL := "https://api.datamuse.com/words?sp=" + startsFrom + "???" + endWith + "&md=f,p&max=1000"
 	logger.Debug("API URL: %v", apiURL)
 	return apiURL
@@ -112,7 +114,7 @@ func Gwordly(word string) {
 	f := 0
 
 	var gameField []string
-	//inputError := false
+	win := false
 
 	fieldStr := "_____"
 	for gf := 0; gf < 5; gf++ {
@@ -124,9 +126,12 @@ func Gwordly(word string) {
 	}
 	reader := bufio.NewReader(os.Stdin)
 
+	logger := config.BotLogger
+	logger.Info("Word %v", word)
+
 	for {
 		if f == 5 {
-			fmt.Print("Fail. Hidden word is " + word)
+			fmt.Println("Fail. Hidden word is " + word)
 			os.Exit(0)
 		}
 		fmt.Print("My suggestion is:")
@@ -141,9 +146,13 @@ func Gwordly(word string) {
 			if !wordExist {
 				fmt.Print("Invalid word\n")
 			} else {
-				gameField[f] = CheckMatches(word, suggestedWord)
+				gameField[f], win = CheckMatches(word, suggestedWord)
 				for g := range gameField {
 					fmt.Println(gameField[g])
+					if win {
+						fmt.Println("You won!")
+						os.Exit(0)
+					}
 				}
 				f++
 			}
@@ -152,31 +161,39 @@ func Gwordly(word string) {
 	}
 }
 
-func CheckMatches(word, suggestedWord string) string {
-
-	logger := config.BotLogger
+func CheckMatches(word, suggestedWord string) (string, bool) {
 
 	swChars := strings.Split(suggestedWord, "")
 	wChars := strings.Split(word, "")
 
 	matches := make([]string, 5)
+	greens := 1
+	win := false
 
 	for i := 0; i < len(swChars); i++ {
 		for j := 0; j < len(wChars); j++ {
-			logger.Debug("wc: %v, index %v; swc: %v, index: %v", wChars[j], j, swChars[i], i)
-			if wChars[j] == swChars[i] {
+			if swChars[i] == wChars[j] {
 				if j != i {
 					matches[i] = fmt.Sprintf(color.YellowString(swChars[i]))
+					greens++
 				} else {
 					matches[i] = fmt.Sprintf(color.GreenString(swChars[i]))
 				}
-			} else {
-				matches[i] = swChars[i]
 			}
 		}
 	}
 
-	return strings.Join(matches, "")
+	for i := 0; i < len(swChars); i++ {
+		if matches[i] == "" {
+			matches[i] = swChars[i]
+		}
+	}
+
+	if greens == 5 {
+		win = true
+	}
+
+	return strings.Join(matches, ""), win
 
 }
 
@@ -201,12 +218,11 @@ func CheckWordExist(word string) (bool, string) {
 		return false, ""
 	}
 
-	return true, words[0].Word
+	return true, words[0].Item
 }
 
 func CheckInput(word string) bool {
 	logger := config.BotLogger
-	//logger.Debug("Suggested word %v", word)
 	check, err := regexp.MatchString("^[a-zA-Z]{5}$", word)
 	if err != nil {
 		logger.Error("Error checking word: ", err)
