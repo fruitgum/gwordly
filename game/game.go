@@ -24,11 +24,13 @@ type Word struct {
 	Item  string   `json:"word,omitempty"`
 	Score int      `json:"score,omitempty"`
 	Tags  []string `json:"tags,omitempty"`
+	Defs  []string `json:"defs,omitempty"`
 }
 
-func GetWords() string {
+func GetWords() (string, string) {
 
 	word := ""
+	def := ""
 	for {
 		var words []Word
 
@@ -40,7 +42,7 @@ func GetWords() string {
 
 		jsonData, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(jsonData, &words)
-		word = GetWord(words)
+		word, def = GetWord(words)
 		if len(word) > 0 {
 			break
 		} else {
@@ -48,12 +50,13 @@ func GetWords() string {
 		}
 	}
 
-	return word
+	return word, def
 }
 
-func GetWord(words []Word) string {
-	var word string
+func GetWord(words []Word) (string, string) {
+	var word, def string
 	var gotWords []string
+	var gotDefs []string
 	for _, w := range words {
 		var freqFloat float64
 		for _, tag := range w.Tags {
@@ -74,7 +77,10 @@ func GetWord(words []Word) string {
 		if freqFloat >= 0.75 {
 			check, _ := regexp.MatchString("^[a-zA-Z]{5}$", w.Item)
 			if check {
-				gotWords = append(gotWords, w.Item)
+				if len(w.Defs) > 0 {
+					gotWords = append(gotWords, w.Item)
+					gotDefs = append(gotDefs, w.Defs[0])
+				}
 			}
 		}
 
@@ -85,9 +91,13 @@ func GetWord(words []Word) string {
 		maxSizeFluct := len(gotWords) - 1
 		randWordIndex := rand.Intn(maxSizeFluct-minSizeFluct+1) + minSizeFluct
 		word = gotWords[randWordIndex]
+		gotDef := gotDefs[randWordIndex]
+		gotDefSplit := strings.Split(gotDef, "\t")
+		def = gotDefSplit[1]
+
 	}
 
-	return word
+	return word, def
 }
 
 func BuildAPIQuery() string {
@@ -102,12 +112,12 @@ func BuildAPIQuery() string {
 
 	endWith := alphabet[rand.Intn(len(alphabet))]
 
-	apiURL := "https://api.datamuse.com/words?sp=" + startsFrom + "???" + endWith + "&md=f,p&max=1000"
+	apiURL := "https://api.datamuse.com/words?sp=" + startsFrom + "???" + endWith + "&md=f,p,d&max=1000"
 	return apiURL
 
 }
 
-func Gwordly(word string) {
+func Gwordly(word, def string) {
 	f := 0
 	fmt.Println("Type `giveup` for finish game and reveal hidden word")
 	var gameField []string
@@ -126,6 +136,7 @@ func Gwordly(word string) {
 	for {
 		if f == 5 {
 			fmt.Println("Fail. Hidden word is " + word)
+			fmt.Println(word + ": " + def)
 			Restart()
 			break
 		}
@@ -135,6 +146,7 @@ func Gwordly(word string) {
 		input = strings.TrimSpace(input)
 		if input == "giveup" {
 			fmt.Println("Hidden word is " + word)
+			fmt.Println(word + ": " + def)
 			Restart()
 			break
 		}

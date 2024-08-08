@@ -7,7 +7,7 @@ import (
 
 func main() {
 
-	appVersion := "0.1b"
+	appVersion := "0.2b"
 
 	fmt.Println("GWordly by Fruitgum - a console version of Wordly written on Go")
 	fmt.Println("https://github.com/fruitgum/GWordly")

@@ -9,8 +9,8 @@ import (
 
 func Start() {
 	fmt.Println("Choosing word...")
-	word := GetWords()
-	Gwordly(word)
+	word, def := GetWords()
+	Gwordly(word, def)
 }
 
 func Restart() {
